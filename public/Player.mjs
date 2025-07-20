@@ -1,19 +1,11 @@
 class Player {
-  constructor({x, y, score, id}) {
+  constructor({ x, y, score, id }) {}
 
-  }
+  movePlayer(dir, speed) {}
 
-  movePlayer(dir, speed) {
+  collision(item) {}
 
-  }
-
-  collision(item) {
-
-  }
-
-  calculateRank(arr) {
-
-  }
+  calculateRank(arr) {}
 }
 
 export default Player;
