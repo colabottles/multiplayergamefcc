@@ -4,7 +4,6 @@ const bodyParser = require("body-parser");
 const expect = require("chai");
 const socket = require("socket.io");
 const helmet = require("helmet");
-const path = require("path");
 
 const fccTestingRoutes = require("./routes/fcctesting.js");
 const runner = require("./test-runner.js");
@@ -22,26 +21,6 @@ app.use(helmet.noSniff());
 app.use(helmet.xssFilter());
 app.use(helmet.noCache());
 app.use(helmet.hidePoweredBy({ setTo: "PHP 7.4.3" }));
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'"],
-        fontSrc: ["'self'"],
-        objectSrc: ["'none'"],
-        mediaSrc: ["'self'"],
-        frameSrc: ["'none'"],
-      },
-    },
-    crossOriginEmbedderPolicy: false, // Disable if you need to embed external content
-    xssFilter: false, // We're setting this manually above
-    noSniff: false, // We're setting this manually above
-  })
-);
 
 // Index page (static HTML)
 app.route("/").get(function (req, res) {
@@ -57,33 +36,6 @@ app.use(function (req, res, next) {
 });
 
 const portNum = process.env.PORT || 3000;
-
-// Custom security middleware function
-const securityHeaders = (req, res, next) => {
-  // Prevent MIME type sniffing
-  res.setHeader("X-Content-Type-Options", "nosniff");
-
-  // Prevent XSS attacks
-  res.setHeader("X-XSS-Protection", "1; mode=block");
-
-  // Prevent caching
-  res.setHeader(
-    "Cache-Control",
-    "no-store, no-cache, must-revalidate, proxy-revalidate"
-  );
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-  res.setHeader("Surrogate-Control", "no-store");
-
-  // Security through obscurity - fake PHP version
-  res.setHeader("X-Powered-By", "PHP 7.4.3");
-
-  // Additional security headers
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-
-  next();
-};
 
 // Set up server and tests
 const server = app.listen(portNum, () => {
