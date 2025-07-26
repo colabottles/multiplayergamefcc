@@ -1,131 +1,175 @@
 import Player from "./Player.mjs";
 import Collectible from "./Collectible.mjs";
-import { dimension } from "./dimension.mjs";
+import controls from "./controls.mjs";
+import { generateStartPos, canvasCalcs } from "./canvas-data.mjs";
+
 const socket = io();
-
-let tick;
-let playersList = [];
-let oxygenEntity;
-let playerEntity;
-let spikeEntity;
-
 const canvas = document.getElementById("game-window");
-const context = canvas.getContext("2d");
+const context = canvas.getContext("2d", { alpha: false });
 
-let meImage = new Image();
-let otherImage = new Image();
-let oxygenImage = new Image();
-let spikeImage = new Image();
-
-const init = () => {
-  // get images
-  meImage.src = "public/img/green.png";
-  otherImage.src = "public/img/white.png";
-  oxygenImage.src = "public/img/oxygen.png";
-  spikeImage.src = "public/img/spikedball.png";
-
-  // create user
-  socket.on("init", ({ id, players, oxygen, spike }) => {
-    console.log(id, players, oxygen, spike);
-    oxygenEntity = new Collectible(oxygen);
-    playerEntity = players.filter((x) => x.id === id)[0];
-    playerEntity = new Player(playerEntity);
-    spikeEntity = new Player(spike);
-
-    playersList = players;
-
-    document.onkeydown = (e) => {
-      let dir = null;
-      switch (e.keyCode) {
-        case 87:
-        case 38:
-          dir = "up";
-          break;
-        case 83:
-        case 40:
-          dir = "down";
-          break;
-        case 65:
-        case 37:
-          dir = "left";
-          break;
-        case 68:
-        case 39:
-          dir = "right";
-          break;
-      }
-      if (dir) {
-        playerEntity.movePlayer(dir, 10);
-        socket.emit("update", playerEntity);
-      }
-    };
-
-    // update
-    socket.on(
-      "update",
-      ({ players: players, spike: spike, oxygen: oxygen, player: player }) => {
-        spikeEntity = new Player(spike);
-        playersList = players;
-        oxygenEntity = new Collectible(oxygen);
-        if (player) {
-          if (player.id === playerEntity.id) {
-            playerEntity = new Player(player);
-          }
-        }
-      }
-    );
-  });
-
-  window.requestAnimationFrame(update);
+// Preload game assets
+const loadImage = (src) => {
+  const img = new Image();
+  img.src = src;
+  return img;
 };
 
-const update = () => {
+const bronzeCoinArt = loadImage(
+  "https://cdn.freecodecamp.org/demo-projects/images/bronze-coin.png"
+);
+const silverCoinArt = loadImage(
+  "https://cdn.freecodecamp.org/demo-projects/images/silver-coin.png"
+);
+const goldCoinArt = loadImage(
+  "https://cdn.freecodecamp.org/demo-projects/images/gold-coin.png"
+);
+const mainPlayerArt = loadImage(
+  "https://cdn.freecodecamp.org/demo-projects/images/main-player.png"
+);
+const otherPlayerArt = loadImage(
+  "https://cdn.freecodecamp.org/demo-projects/images/other-player.png"
+);
+
+let tick;
+let currPlayers = [];
+let item;
+let endGame;
+
+socket.on("init", ({ id, players, coin }) => {
+  console.log(`Connected ${id}`);
+
+  // Cancel animation if one already exists and
+  // the page isn't refreshed, like if the server
+  // restarts
+  cancelAnimationFrame(tick);
+
+  // Create our player when we log on
+  const mainPlayer = new Player({
+    x: generateStartPos(
+      canvasCalcs.playFieldMinX,
+      canvasCalcs.playFieldMaxX,
+      5
+    ),
+    y: generateStartPos(
+      canvasCalcs.playFieldMinY,
+      canvasCalcs.playFieldMaxY,
+      5
+    ),
+    id,
+    main: true,
+  });
+
+  controls(mainPlayer, socket);
+
+  // Send our player back to the server
+  socket.emit("new-player", mainPlayer);
+
+  // Add new player when someone logs on
+  socket.on("new-player", (obj) => {
+    // Check that player doesn't already exist
+    const playerIds = currPlayers.map((player) => player.id);
+    if (!playerIds.includes(obj.id)) currPlayers.push(new Player(obj));
+  });
+
+  // Handle movement
+  socket.on("move-player", ({ id, dir, posObj }) => {
+    const movingPlayer = currPlayers.find((obj) => obj.id === id);
+    movingPlayer.moveDir(dir);
+
+    // Force sync in case of lag
+    movingPlayer.x = posObj.x;
+    movingPlayer.y = posObj.y;
+  });
+
+  socket.on("stop-player", ({ id, dir, posObj }) => {
+    const stoppingPlayer = currPlayers.find((obj) => obj.id === id);
+    stoppingPlayer.stopDir(dir);
+
+    // Force sync in case of lag
+    stoppingPlayer.x = posObj.x;
+    stoppingPlayer.y = posObj.y;
+  });
+
+  // Handle new coin gen
+  socket.on("new-coin", (newCoin) => {
+    item = new Collectible(newCoin);
+  });
+
+  // Handle player disconnection
+  socket.on("remove-player", (id) => {
+    console.log(`${id} disconnected`);
+    currPlayers = currPlayers.filter((player) => player.id !== id);
+  });
+
+  // Handle endGame state
+  socket.on("end-game", (result) => (endGame = result));
+
+  // Update scoring player's score
+  socket.on("update-player", (playerObj) => {
+    const scoringPlayer = currPlayers.find((obj) => obj.id === playerObj.id);
+    scoringPlayer.score = playerObj.score;
+  });
+
+  // Populate list of connected players and
+  // create current coin when logging in
+  currPlayers = players.map((val) => new Player(val)).concat(mainPlayer);
+  item = new Collectible(coin);
+
+  draw();
+});
+
+const draw = () => {
   context.clearRect(0, 0, canvas.width, canvas.height);
 
   // Set background color
-  context.fillStyle = "#1c4966";
+  context.fillStyle = "#220";
   context.fillRect(0, 0, canvas.width, canvas.height);
 
   // Create border for play field
-  context.strokeStyle = "#45b6fe";
+  context.strokeStyle = "white";
   context.strokeRect(
-    dimension.minX,
-    dimension.minY,
-    dimension.arenaSizeX,
-    dimension.arenaSizeY
+    canvasCalcs.playFieldMinX,
+    canvasCalcs.playFieldMinY,
+    canvasCalcs.playFieldWidth,
+    canvasCalcs.playFieldHeight
   );
 
   // Controls text
-  context.fillStyle = "#45b6fe";
+  context.fillStyle = "white";
   context.font = `13px 'Press Start 2P'`;
   context.textAlign = "center";
-  context.fillText("Controls", 80, 20);
-  context.textAlign = "center";
-  context.fillText("WASD", 80, 40);
+  context.fillText("Controls: WASD", 100, 32.5);
 
   // Game title
-  context.font = `40px 'Modak'`;
-  context.fillText("Bubble survivor", 300, 40);
+  context.font = `16px 'Press Start 2P'`;
+  context.fillText("Coin Race", canvasCalcs.canvasWidth / 2, 32.5);
 
-  if (playerEntity) {
-    playerEntity.draw(context, meImage);
-    context.font = `26px 'Modak'`;
-    context.fillText(playerEntity.calculateRank(playersList), 560, 40);
-    playersList.forEach((player) => {
-      if (player.id !== playerEntity.id) {
-        let p = new Player(player);
-        p.draw(context, otherImage);
-      }
+  // Calculate score and draw players each frame
+  currPlayers.forEach((player) => {
+    player.draw(context, item, { mainPlayerArt, otherPlayerArt }, currPlayers);
+  });
+
+  // Draw current coin
+  item.draw(context, { bronzeCoinArt, silverCoinArt, goldCoinArt });
+
+  // Remove destroyed coin
+  if (item.destroyed) {
+    socket.emit("destroy-item", {
+      playerId: item.destroyed,
+      coinValue: item.value,
+      coinId: item.id,
     });
-    if (oxygenEntity) {
-      oxygenEntity.draw(context, oxygenImage);
-    }
-    if (spikeEntity) {
-      spikeEntity.draw(context, spikeImage);
-    }
   }
 
-  tick = requestAnimationFrame(update);
-};
+  if (endGame) {
+    context.fillStyle = "white";
+    context.font = `13px 'Press Start 2P'`;
+    context.fillText(
+      `You ${endGame}! Restart and try again.`,
+      canvasCalcs.canvasWidth / 2,
+      80
+    );
+  }
 
-init();
+  if (!endGame) tick = requestAnimationFrame(draw);
+};
