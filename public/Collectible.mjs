@@ -1,23 +1,21 @@
 class Collectible {
-  constructor({ x, y, value, id }) {
+  constructor({ x = 10, y = 10, w = 15, h = 15, value = 1, id }) {
     this.x = x;
     this.y = y;
+    this.w = w;
+    this.h = h;
     this.value = value;
     this.id = id;
-    this.radius = 20;
   }
 
-  draw(context, img) {
-    /*context.beginPath();
-    context.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
-    context.stroke();*/
-    context.drawImage(
-      img,
-      this.x - this.radius,
-      this.y - this.radius,
-      2 * this.radius,
-      2 * this.radius
-    );
+  draw(context, imgObj) {
+    if (this.value === 1) {
+      context.drawImage(imgObj.bronzeCoinArt, this.x, this.y);
+    } else if (this.value === 2) {
+      context.drawImage(imgObj.silverCoinArt, this.x, this.y);
+    } else {
+      context.drawImage(imgObj.goldCoinArt, this.x, this.y);
+    }
   }
 }
 
