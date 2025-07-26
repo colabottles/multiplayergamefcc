@@ -1,68 +1,84 @@
-import { dimension } from "./dimension.mjs";
+import { canvasCalcs } from "./canvas-data.mjs";
 
 class Player {
-  constructor({ x, y, score, id, radius = 30 }) {
+  constructor({ x = 10, y = 10, w = 30, h = 30, score = 0, main, id }) {
     this.x = x;
     this.y = y;
+    this.w = w;
+    this.h = h;
+    this.speed = 5;
     this.score = score;
     this.id = id;
-    // hitbox
-    this.radius = radius;
+    this.movementDirection = {};
+    this.isMain = main;
+  }
+
+  draw(context, coin, imgObj, currPlayers) {
+    const currDir = Object.keys(this.movementDirection).filter(
+      (dir) => this.movementDirection[dir]
+    );
+    currDir.forEach((dir) => this.movePlayer(dir, this.speed));
+
+    if (this.isMain) {
+      context.font = `13px 'Press Start 2P'`;
+      context.fillText(this.calculateRank(currPlayers), 560, 32.5);
+
+      context.drawImage(imgObj.mainPlayerArt, this.x, this.y);
+    } else {
+      context.drawImage(imgObj.otherPlayerArt, this.x, this.y);
+    }
+
+    if (this.collision(coin)) {
+      coin.destroyed = this.id;
+    }
+  }
+
+  moveDir(dir) {
+    this.movementDirection[dir] = true;
+  }
+
+  stopDir(dir) {
+    this.movementDirection[dir] = false;
   }
 
   movePlayer(dir, speed) {
-    switch (dir) {
-      case "up":
-        this.y = Math.max(dimension.minY + this.radius, this.y - speed);
-        break;
-      case "down":
-        this.y = Math.min(dimension.maxY - this.radius, this.y + speed);
-        break;
-      case "left":
-        this.x = Math.max(dimension.minX + this.radius, this.x - speed);
-        break;
-      case "right":
-        this.x = Math.min(dimension.maxX - this.radius, this.x + speed);
-        break;
-    }
+    if (dir === "up")
+      this.y - speed >= canvasCalcs.playFieldMinY
+        ? (this.y -= speed)
+        : (this.y -= 0);
+    if (dir === "down")
+      this.y + speed <= canvasCalcs.playFieldMaxY
+        ? (this.y += speed)
+        : (this.y += 0);
+    if (dir === "left")
+      this.x - speed >= canvasCalcs.playFieldMinX
+        ? (this.x -= speed)
+        : (this.x -= 0);
+    if (dir === "right")
+      this.x + speed <= canvasCalcs.playFieldMaxX
+        ? (this.x += speed)
+        : (this.x += 0);
   }
 
   collision(item) {
-    var dx = this.x - item.x;
-    var dy = this.y - item.y;
-    var distance = Math.sqrt(dx * dx + dy * dy);
-    if (distance < this.radius + item.radius) {
+    if (
+      this.x < item.x + item.w &&
+      this.x + this.w > item.x &&
+      this.y < item.y + item.h &&
+      this.y + this.h > item.y
+    )
       return true;
-    }
-    return false;
-  }
-
-  draw(context, img) {
-    // show the hitbox
-    /*context.beginPath();
-    context.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
-    context.stroke();*/
-    context.drawImage(
-      img,
-      this.x - this.radius,
-      this.y - this.radius,
-      2 * this.radius,
-      2 * this.radius
-    );
   }
 
   calculateRank(arr) {
-    const sort = arr.sort((a, b) => b.score - a.score);
-    let position = 0;
-    sort.forEach((player, index) => {
-      if (this.id === player.id) position = index + 1;
-    });
+    const sortedScores = arr.sort((a, b) => b.score - a.score);
+    const mainPlayerRank =
+      this.score === 0
+        ? arr.length
+        : sortedScores.findIndex((obj) => obj.id === this.id) + 1;
 
-    return `Rank: ${position} / ${arr.length}`;
+    return `Rank: ${mainPlayerRank} / ${arr.length}`;
   }
 }
-try {
-  module.exports = Player;
-} catch (e) {}
 
 export default Player;
